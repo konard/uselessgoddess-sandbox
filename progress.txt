@@ -4,3 +4,20 @@
 - Next: web-search each hypothesis to ground it; record real URLs/DOIs and pull quotes.
 - Constraint: report must be flowing prose (not bullet soup). Save to CS2_Human_Like_Bot_Report.md.
 - Constraint: state files must remain on disk; checkpoint after every search batch.
+
+[2026-05-05] Issue #3 research pass — seamless architecture.
+- Read existing CS2_Human_Like_Bot_Report.md to understand what was already covered (Fitts, min-jerk, Sigma-Lognormal, ex-Gaussian RT, CS2 inaccuracy, counter-strafe). New report must complement, not duplicate.
+- Added three new hypotheses to research_notes.json:
+    H6 — Seamless attention blending = saliency envelope -> smootherstep -> slerp on critically-damped quaternion springs (with squad for >2 authorities).
+    H7 — RepViT lag is best handled by bias-correction extrapolation: engine velocity drives the fast prediction, RepViT residual is a slow drift-correction term; cubic Hermite for retro-fitting between two anchors; IEEE 1278.1 DRM(F,P,W) as the canonical constant-acceleration form.
+    H8 — Async ort inference threads share state with the high-frequency control loop via wait-free SPSC primitives: triple_buffer for fast-changing inference snapshots, ArcSwap for slow-changing config; one ort::Session per thread driving Session::run_async on its own intra-op pool.
+- Grounded each hypothesis with web searches of primary sources: Shoemake 1985 SLERP, Perlin smootherstep, Holden "Spring-It-On", Tanaka 1998 saccade-pursuit, Orban de Xivry 2013, Lengyel projective velocity blending (Game Engine Gems 1), IEEE 1278.1 DIS DRM, pykeio/ort docs, HadrienG2/triple_buffer, vorner/arc-swap, alexheretic/spin_sleep.
+- WebFetch failed on two binary PDFs (Lengyel chapter, Walker thesis) and on one 403'd article; worked around via Wikipedia + ResearchGate + secondary sources that contained the equations verbatim.
+- Wrote /tmp/gh-issue-solver-1777973417056/Seamless_CS2_Bot_Architecture.md (~6500 words, 6 sections + references).
+    Section 1 frames the three seams (asymmetric error, staleness, sub-tick budget).
+    Section 2 derives the blending pipeline: asymmetric one-pole envelope -> smootherstep -> slerp on critically-damped attitudes; saccadic-suppression term during in-flight flicks.
+    Section 3 derives kinematic extrapolation: projective velocity blending, cubic Hermite for retro-fits, bias-correction Kalman where engine velocity is the process model and RepViT is the measurement.
+    Section 4 lays out the lock-free Rust+ort architecture: triple_buffer for inference snapshots, ArcSwap for config, ort::Session::run_async with per-thread intra-op pools, SCHED_FIFO controller, spin_sleep pacing.
+    Sections 5/6 close with a putting-it-together synthesis and a verified reference list.
+- Files modified: Seamless_CS2_Bot_Architecture.md (new), progress.txt (this entry), research_notes.json (H6–H8 + new refs).
+- Next: commit, push to issue-3-72f0ae39bf56, update PR #4 title/body, mark ready for review.

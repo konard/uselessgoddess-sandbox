@@ -1,11 +1,13 @@
 {
   "schema_version": "1.0",
   "started_at": "2026-05-05",
-  "task": "CS2 human-like Deathmatch bot — math/algorithms for simultaneous movement + shooting",
+  "task": "CS2 human-like Deathmatch bot — math/algorithms for simultaneous movement + shooting; then seamless attention blending, kinematic extrapolation, async Rust+ort architecture (issue #3)",
   "tech_stack": {
     "navigation_yaw_pitch_predictor": "RepViT M1.5 (returns spatial coords + yaw/pitch on maps)",
     "target_detector": "YOLO v26 (custom, target bounding boxes)",
-    "pathing": "CS2 navmesh exported to JSON"
+    "pathing": "CS2 navmesh exported to JSON",
+    "runtime": "Rust + ort (pykeio ONNX Runtime binding)",
+    "execution_providers": "CUDA / TensorRT for RepViT and YOLO"
   },
   "hypothesis_tree": [
     {
@@ -42,6 +44,51 @@
       "confidence": 0.8,
       "supporting": ["Reaction-time meta-analyses; ex-Gaussian distribution"],
       "consequences": "Sample reaction delay from ex-Gaussian (mu, sigma, tau) before triggering aim+fire."
+    },
+    {
+      "id": "H6",
+      "claim": "Seamless transition between RepViT path-following authority and YOLO enemy-flicking authority is achieved by an asymmetric one-pole saliency envelope feeding a smootherstep weight that drives slerp between two critically-damped quaternion attitudes; squad generalizes to >=3 authorities.",
+      "confidence": 0.9,
+      "supporting": [
+        "Shoemake 1985 SIGGRAPH — Animating rotation with quaternion curves (slerp definition)",
+        "Perlin 2002 SIGGRAPH course 'Improving Noise' — smootherstep S2(t)=6t^5-15t^4+10t^3 with vanishing 1st and 2nd derivatives",
+        "Tanaka et al. 1998 Neuroscience Research 32:197 — saccade-to-pursuit transition latency and gain enhancement",
+        "Orban de Xivry & Lefevre 2013 Frontiers in Systems Neuroscience 7:4 — saccade/pursuit interaction review",
+        "Daniel Holden 'Spring-It-On' (theorangeduck.com/page/spring-roll-call) — closed-form, dt-independent critically damped spring with half-life parameterization",
+        "Earlevel one-pole filter / asymmetric envelope generator references (audio dynamics canonical form)",
+        "Lisberger & Westbrook 1985 — presaccadic-to-postsaccadic pursuit gain enhancement",
+        "Land & Tatler 2009 'Looking and Acting' OUP — saccadic suppression"
+      ],
+      "consequences": "Blender pipeline = (raw detection event) -> attack/release one-pole on saliency alpha with tau_a~30ms, tau_r~250ms -> smootherstep -> slerp(q_path_smoothed, q_enemy_smoothed, S2(alpha)); each attitude pre-filtered by a half-life~25ms critically damped angular spring; attenuate YOLO contribution to saliency by exp(-|omega|/omega0) during in-flight flicks (saccadic suppression analogue)."
+    },
+    {
+      "id": "H7",
+      "claim": "RepViT's spatial-pose output is stale by one inference window; the right correction is bias-correction extrapolation in which the bot's engine velocity drives the forward prediction and RepViT contributes only a slowly-varying drift residual; for retro-fitting between two anchors use cubic Hermite; for intent-drift handling use projective velocity blending; for the formal canonical form follow IEEE 1278.1 DRM(F,P,W).",
+      "confidence": 0.85,
+      "supporting": [
+        "IEEE 1278.1-2012 Distributed Interactive Simulation — Application Protocols, Dead-Reckoning Models DRM(F,P,W) and DRM(F,V,W) (constant-velocity, constant-acceleration, with/without rotation)",
+        "Eric Lengyel 2010 'Game Engine Gems 1' chapter on Projective Velocity Blending — blends predicted server position with current client extrapolation along a projective curve to avoid pop-in",
+        "Wikipedia 'Cubic Hermite spline' — basis functions h00, h10, h01, h11 used for C1 retro-fits between two pose anchors",
+        "Kalman 1960 — A New Approach to Linear Filtering and Prediction Problems (used as conceptual frame for the bias-correction filter)",
+        "Aaron Aronov (Riot Games / GDC) talks on net-code dead reckoning",
+        "Walker 2008 thesis on networked simulation extrapolation (referenced in Lengyel chapter)"
+      ],
+      "consequences": "Predicted view at controller time t_now = base RepViT pose + integrate(engine velocity, dt_lag) - bias_term, where bias_term is a slow EMA of (RepViT estimate - own integrated track) at past common timestamps. Use cubic Hermite for one-shot retro-correction between previous prediction and new authoritative pose so the controller's input is C1-continuous."
+    },
+    {
+      "id": "H8",
+      "claim": "Async ONNX inference threads should share state with the 1 kHz control loop using wait-free SPSC primitives — triple_buffer for fast-changing perception snapshots, ArcSwap for slow-changing config — with one ort::Session per inference thread driving Session::run_async on its own intra-op thread pool, controller pinned with SCHED_FIFO and paced by spin_sleep.",
+      "confidence": 0.9,
+      "supporting": [
+        "pykeio ort crate docs (ort.pyke.io / docs.rs/ort) — Session::run_async, SessionBuilder::with_intra_threads, with_parallel_execution, ExecutionProvider::CUDA/TensorRT",
+        "HadrienG2/triple_buffer crate — wait-free SPSC triple buffer (always read latest, never block writer)",
+        "vorner/arc-swap crate — wait-free reads of an Arc, RCU-style swap-on-update for slow-changing data",
+        "alexheretic/spin_sleep crate — accurate sub-millisecond sleep on Windows/Linux",
+        "ONNX Runtime documentation on intra_op_num_threads vs inter_op_num_threads",
+        "Linux man sched(7) on SCHED_FIFO; Windows SetThreadPriority(THREAD_PRIORITY_TIME_CRITICAL)",
+        "DPDK / audio-callback / game-engine literature on lock-free real-time threads"
+      ],
+      "consequences": "Architecture has three threads: (a) RepViT inference thread owns ort::Session_repvit and writes to TripleBuffer<RepVitFrame>; (b) YOLO inference thread owns ort::Session_yolo and writes to TripleBuffer<YoloFrame>; (c) Controller thread (SCHED_FIFO/TIME_CRITICAL) reads both triple buffers and an ArcSwap<Config>, runs the blender + extrapolator + counter-strafe FSM, and emits HID events. No locks on the hot path; all sessions use Session::run_async to overlap GPU dispatch with controller ticks."
     }
   ],
   "key_references": [
@@ -66,11 +113,30 @@
     "Spjut et al. NVIDIA 2019 — Latency of 30 ms benefit on aiming and target acquisition (Esports Research)",
     "Looser, Cockburn, Savage 2005 — Mouse acceleration evaluation",
     "Quinn & Zhai 2018 — Modeling gesture-typing movements",
-    "Hannuna et al. 2019 — Human-like mouse trajectories via GANs"
+    "Hannuna et al. 2019 — Human-like mouse trajectories via GANs",
+    "Wang et al. 2023 — RepViT: Revisiting Mobile CNN From ViT Perspective (arXiv 2307.09283)",
+    "Shoemake 1985 SIGGRAPH — Animating rotation with quaternion curves (slerp / squad)",
+    "Perlin 2002 — Improving Noise (smootherstep S2)",
+    "Tanaka, Yoshida, Fukushima 1998 — Neuroscience Research 32:197 (saccade-pursuit transition)",
+    "Orban de Xivry & Lefevre 2013 — Frontiers in Systems Neuroscience 7:4",
+    "Holden 2021 — Spring-It-On (theorangeduck.com/page/spring-roll-call)",
+    "Land & Tatler 2009 — Looking and Acting (OUP)",
+    "IEEE 1278.1-2012 — Distributed Interactive Simulation Application Protocols (DRM family)",
+    "Lengyel 2010 — Projective Velocity Blending (Game Engine Gems 1)",
+    "Wikipedia — Cubic Hermite spline (h00, h10, h01, h11 basis)",
+    "Kalman 1960 — A New Approach to Linear Filtering and Prediction Problems",
+    "pykeio/ort — Rust ONNX Runtime binding (docs.rs/ort, ort.pyke.io)",
+    "HadrienG2/triple_buffer — wait-free SPSC triple buffer (crates.io)",
+    "vorner/arc-swap — RCU-style atomic Arc (crates.io)",
+    "alexheretic/spin_sleep — high-precision sleep (crates.io)",
+    "ONNX Runtime — performance/threading docs",
+    "Linux sched(7) man page — SCHED_FIFO; Microsoft docs — THREAD_PRIORITY_TIME_CRITICAL"
   ],
   "open_questions": [
     "What are CS2's exact inaccuracy decay constants for AK-47, M4A1-S, AWP after stopping?",
     "Does CS2 have sub-tick movement (yes — 64 tick subtick since 2023)?",
-    "Best public dataset of human CS2 mouse traces for training a noise model?"
+    "Best public dataset of human CS2 mouse traces for training a noise model?",
+    "Empirical RepViT M1.5 inference latency on a 4090 at 384x384 with TensorRT FP16 (estimate ~5-8 ms; needs benchmarking)?",
+    "Optimal triple_buffer vs SeqLock tradeoff for the inference->controller channel under contention?"
   ]
 }
