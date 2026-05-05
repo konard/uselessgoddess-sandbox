@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "started_at": "2026-05-05",
+  "task": "CS2 human-like Deathmatch bot — math/algorithms for simultaneous movement + shooting",
+  "tech_stack": {
+    "navigation_yaw_pitch_predictor": "RepViT M1.5 (returns spatial coords + yaw/pitch on maps)",
+    "target_detector": "YOLO v26 (custom, target bounding boxes)",
+    "pathing": "CS2 navmesh exported to JSON"
+  },
+  "hypothesis_tree": [
+    {
+      "id": "H1",
+      "claim": "Human aiming is decomposable into a primary ballistic submovement + corrective submovements (Meyer/Crossman-Goodeve / WHo model).",
+      "confidence": 0.9,
+      "supporting": ["Meyer 1988 'Optimality in human motor performance' iso-vu model", "Bullock & Grossberg VITE", "Plamondon delta-lognormal Sigma-Lognormal model"],
+      "consequences": "We can synthesize aim curves as a sum of overlapping bell-shaped speed profiles (Sigma-Lognormal); produces both ballistic + corrective phases."
+    },
+    {
+      "id": "H2",
+      "claim": "Mouse path geometry is well modelled by Bezier curves perturbed by Perlin/OU noise with constant-jerk timing.",
+      "confidence": 0.85,
+      "supporting": ["Bezmouse / pyclick / GhostCursor / WindMouse algorithm by Benjamin J. Land (Aldaron) 2007", "Minimum-jerk model Flash & Hogan 1985"],
+      "consequences": "Use 3rd-order Bezier between current and target with noise overlay; reparameterize time with min-jerk profile."
+    },
+    {
+      "id": "H3",
+      "claim": "Counter-strafe accuracy mechanic in CS2 is the dominant constraint on simultaneous movement+shooting.",
+      "confidence": 0.95,
+      "supporting": ["Valve developer wiki on weapon_accuracy_nospread / inaccuracy", "CS2 movement inaccuracy decay constants from cs_weapon_data"],
+      "consequences": "Bot must press opposite key for ~50–80 ms before shooting (A then D, etc.) to zero velocity, then re-press."
+    },
+    {
+      "id": "H4",
+      "claim": "PID/Kalman fusion of RepViT yaw/pitch (low-frequency, prior) with YOLO target offsets (high-frequency, evidence) yields stable aim.",
+      "confidence": 0.7,
+      "supporting": ["Standard sensor-fusion / Kalman Filter literature; complementary filter alternative"],
+      "consequences": "Treat RepViT as process model, YOLO measurement; tune Q/R to taste."
+    },
+    {
+      "id": "H5",
+      "claim": "Reaction-time noise (200–250 ms median) and overshoot ratio (~5–10 %) must be sampled to defeat anti-cheat heuristics and bot-detection by ML.",
+      "confidence": 0.8,
+      "supporting": ["Reaction-time meta-analyses; ex-Gaussian distribution"],
+      "consequences": "Sample reaction delay from ex-Gaussian (mu, sigma, tau) before triggering aim+fire."
+    }
+  ],
+  "key_references": [
+    "Fitts 1954 — The information capacity of the human motor system in controlling the amplitude of movement",
+    "Meyer, Abrams, Kornblum, Wright, Smith 1988 — Optimality in human motor performance: ideal control of rapid aimed movements",
+    "Plamondon & Djioua 2006 — A multi-level representation paradigm for handwriting stroke generation (Sigma-Lognormal)",
+    "Flash & Hogan 1985 — The coordination of arm movements: an experimentally confirmed mathematical model",
+    "Crossman & Goodeve 1963/1983 — Feedback control of hand-movement and Fitts' law",
+    "Aldaron / Benjamin J. Land 2007 — WindMouse algorithm",
+    "Pearson 1996+ — Botting and human movement emulation in MMOs (BotMouse)",
+    "Welford 1968 — The fundamentals of skill (reaction time)",
+    "Soukoreff & MacKenzie 2004 — Towards a standard for pointing device evaluation (Fitts II)",
+    "Card, English, Burr 1978 — Evaluation of mouse, rate-controlled isometric joystick (Fitts and ID)",
+    "DeepMind FTW / Capture the Flag 2018 (Jaderberg et al.)",
+    "OpenAI Five Dota 2 (Berner et al. 2019)",
+    "Pearce & Zhu 2022 — Counter-Strike Deathmatch with Large-Scale Behavioural Cloning (arXiv 2104.04258)",
+    "Pearce, Zhu et al. 2023 — Imitating Human Behaviour with Diffusion Models",
+    "Vinyals et al. 2019 — AlphaStar",
+    "Ye et al. 2020 — Mastering Complex Control in MOBA Games with Deep RL",
+    "Anderson et al. 2017 — Deep Successor Reinforcement Learning",
+    "OpenAI VPT 2022 — Video PreTraining (Baker et al.)",
+    "Spjut et al. NVIDIA 2019 — Latency of 30 ms benefit on aiming and target acquisition (Esports Research)",
+    "Looser, Cockburn, Savage 2005 — Mouse acceleration evaluation",
+    "Quinn & Zhai 2018 — Modeling gesture-typing movements",
+    "Hannuna et al. 2019 — Human-like mouse trajectories via GANs"
+  ],
+  "open_questions": [
+    "What are CS2's exact inaccuracy decay constants for AK-47, M4A1-S, AWP after stopping?",
+    "Does CS2 have sub-tick movement (yes — 64 tick subtick since 2023)?",
+    "Best public dataset of human CS2 mouse traces for training a noise model?"
+  ]
+}

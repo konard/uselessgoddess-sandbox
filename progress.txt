@@ -1,0 +1,6 @@
+[2026-05-05] Started.
+- Created task list (11 tasks).
+- Initialized research_notes.json with five working hypotheses (H1–H5) and a reference list of plausible papers/tools.
+- Next: web-search each hypothesis to ground it; record real URLs/DOIs and pull quotes.
+- Constraint: report must be flowing prose (not bullet soup). Save to CS2_Human_Like_Bot_Report.md.
+- Constraint: state files must remain on disk; checkpoint after every search batch.
